@@ -1,0 +1,15 @@
+# requirements.txt
+
+# สำหรับการจัดการข้อมูลและการแปลง (Transformation)
+pandas
+
+# สำหรับการเชื่อมต่อฐานข้อมูล
+sqlalchemy
+psycopg2-binary
+
+# สำหรับการเชื่อมต่อ Google Sheets และการเผยแพร่ข้อมูล (Publication)
+gspread
+pandas-gspread
+
+# สำหรับการโหลดตัวแปรสภาพแวดล้อมจากไฟล์ .env
+python-dotenv

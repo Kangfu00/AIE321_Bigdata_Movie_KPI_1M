@@ -1,0 +1,23 @@
+# .gitignore
+
+# 1. ไฟล์ความลับ (Secrets & Credentials)
+.env
+credentials.json
+key.json  # หากใช้ Google Service Account Keys อื่นๆ
+
+# 2. ไฟล์ข้อมูลดิบ (Raw Data)
+# ป้องกันไม่ให้ไฟล์ขนาดใหญ่ถูก commit เข้า Git
+# (ใส่ชื่อไฟล์ที่คุณดาวน์โหลดมาจาก Kaggle เช่น)
+*.csv
+*.json
+*.zip
+data/
+
+# 3. ไฟล์สภาพแวดล้อม (Environment & Cache)
+venv/           # โฟลเดอร์ Virtual Environment (ถ้าใช้)
+__pycache__/    # โฟลเดอร์ Cache ของ Python
+*.pyc           # Compiled Python files
+
+# 4. ไฟล์เฉพาะระบบปฏิบัติการ (OS/Editor specific files)
+.DS_Store       # สำหรับ macOS
+Thumbs.db       # สำหรับ Windows

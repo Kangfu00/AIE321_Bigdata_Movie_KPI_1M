@@ -1,15 +1,24 @@
 version: '3.8'
+
 services:
-  db:
+  db: # <--- ชื่อ Service: db (โค้ด Python จะใช้ชื่อนี้เป็น DB_HOST)
     image: postgres:14
     environment:
-       POSTGRES_USER : DB_AIE321_BIG_DATA
-       POSTGRES_PASSWORD : 321bigdatawork
-       POSTGRES_DB : AIE321
+      # ดึงค่าจากไฟล์ .env
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    
+    # แมปพอร์ต: 6666 (เครื่องโฮสต์) ไปยัง 5432 (Container)
     ports:
-    - "6666:6666"
+      - "6666:5432" 
+    
     volumes:
-    - postgres_data
-    restart:
+      # ใช้ Docker Volume ชื่อ postgres_data ในการเก็บไฟล์ฐานข้อมูล
+      - postgres_data:/var/lib/postgresql/data
+      
+    restart: always 
+
 volumes:
   postgres_data:
+    # กำหนดให้ Docker จัดการ Volume นี้เพื่อความคงทนของข้อมูล
