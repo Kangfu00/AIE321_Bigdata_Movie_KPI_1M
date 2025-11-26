@@ -9,12 +9,17 @@ from dotenv import load_dotenv
 import gspread
 from gspread_dataframe import set_with_dataframe # ใช้สำหรับเขียน DataFrame ลง Sheets
 
-# --- 1. การตั้งค่าตัวแปรคงที่ ---
+# --- 1. การตั้งค่าตัวแปรคงที่ (ปรับปรุงสำหรับ OAuth) ---
 PRODUCTION_TABLE_NAME = 'movie_facts' 
 PRODUCTION_SCHEMA_NAME = 'production'
 GOOGLE_SHEET_TITLE = 'Kaggle Data Pipeline Report' 
 WORKSHEET_NAME = 'Final Data' 
-CREDENTIALS_FILE = 'credentials.json' 
+
+# 🚨 เปลี่ยนชื่อไฟล์ credentials ให้ตรงกับไฟล์ที่คุณดาวน์โหลดมา
+CREDENTIALS_FILE = 'client_secret.json' 
+# เพิ่มไฟล์สำหรับเก็บ Token อัตโนมัติหลังการล็อกอินครั้งแรก
+STORAGE_FILE = 'gspread_oauth_storage.json'
+
 
 def run_publication_pipeline():
     """
@@ -30,15 +35,13 @@ def run_publication_pipeline():
     DB_NAME = os.getenv("POSTGRES_DB")
     DB_PORT = os.getenv("DB_PORT")
 
-    # --- 2. การเชื่อมต่อฐานข้อมูล ---
+    # --- 2. การเชื่อมต่อฐานข้อมูล (ส่วนนี้ไม่มีการเปลี่ยนแปลง) ---
     try:
-        # สร้าง Connection String
         conn_string = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
         engine = create_engine(conn_string)
 
         print(f"--- เริ่มดึงข้อมูลจาก {PRODUCTION_SCHEMA_NAME}.{PRODUCTION_TABLE_NAME} (Host: {DB_HOST}:{DB_PORT}) ---")
         
-        # ดึงข้อมูลที่แปลงแล้วจาก Production Schema
         sql_query = f"SELECT * FROM {PRODUCTION_SCHEMA_NAME}.{PRODUCTION_TABLE_NAME};"
         final_df = pd.read_sql(sql_query, con=engine)
         
@@ -47,10 +50,9 @@ def run_publication_pipeline():
     except Exception as e:
         print(f"!!! Error: ไม่สามารถเชื่อมต่อ DB หรือดึงข้อมูลได้ !!!")
         print(f"สาเหตุ: {e}")
-        # หากดึงข้อมูลไม่ได้ ให้หยุดการทำงาน
         return 
 
-    # --- 3. การเผยแพร่ไปยัง Google Sheets ---
+    # --- 3. การเผยแพร่ไปยัง Google Sheets (ส่วนที่ได้รับการแก้ไข) ---
     if final_df.empty:
         print("!!! ไม่พบข้อมูลในตาราง Production ไม่สามารถเผยแพร่ได้ !!!")
         return
@@ -58,8 +60,14 @@ def run_publication_pipeline():
     print(f"--- เริ่มเผยแพร่ข้อมูลไปยัง Google Sheets: {GOOGLE_SHEET_TITLE} ---")
     
     try:
-        # เชื่อมต่อกับ Google Service Account
-        gc = gspread.service_account(filename=CREDENTIALS_FILE)
+        # *** 🚨 แก้ไข: ใช้ gspread.oauth() แทน service_account() ***
+        gc = gspread.oauth(
+            credentials_file=CREDENTIALS_FILE,
+            authorized_user_storage=STORAGE_FILE 
+        )
+        
+        # ⚠️ ข้อความแจ้งเตือนถูกเปลี่ยนให้สอดคล้องกับไฟล์ที่ใช้ (client_secret.json)
+        print(f"เชื่อมต่อสำเร็จ! จะใช้ Token ในไฟล์ {STORAGE_FILE} สำหรับการรันครั้งต่อไป")
         
         # เปิด Spreadsheet (หรือสร้างใหม่)
         try:
@@ -67,7 +75,7 @@ def run_publication_pipeline():
         except gspread.SpreadsheetNotFound:
             print(f"ไม่พบ Spreadsheet กำลังสร้างใหม่ชื่อ '{GOOGLE_SHEET_TITLE}'...")
             spreadsheet = gc.create(GOOGLE_SHEET_TITLE)
-            # สำคัญ: ต้องแชร์ Spreadsheet นี้ให้กับอีเมล Service Account ด้วยตนเอง 
+            # ต้องแชร์ Spreadsheet นี้ให้กับบัญชี Google ส่วนตัวที่ใช้ล็อกอิน! 
             
         # เลือกหรือสร้าง Worksheet
         try:
@@ -82,10 +90,11 @@ def run_publication_pipeline():
         print(f"ลิงก์ Spreadsheet: {spreadsheet.url}")
         
     except FileNotFoundError:
-        print(f"!!! ERROR: ไม่พบไฟล์ credentials.json โปรดตรวจสอบพาธ !!!")
+        # ⚠️ แก้ไขข้อความ Error
+        print(f"!!! ERROR: ไม่พบไฟล์ {CREDENTIALS_FILE} โปรดตรวจสอบพาธ !!!")
     except Exception as e:
         print(f"เกิดข้อผิดพลาดในการเชื่อมต่อ/เผยแพร่ Google Sheets: {e}")
-        print("โปรดตรวจสอบการตั้งค่า API และการแชร์ Spreadsheet ให้ Service Account")
+        print("โปรดตรวจสอบการล็อกอิน OAuth ครั้งแรก และสิทธิ์การเข้าถึง Sheets ของบัญชีคุณ")
 
 
 if __name__ == '__main__':
