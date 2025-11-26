@@ -1,9 +1,10 @@
 # publish.py
 
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import os
 from dotenv import load_dotenv
+import psycopg2
 
 # นำเข้าไลบรารีสำหรับ Google Sheets
 import gspread
@@ -14,7 +15,7 @@ PRODUCTION_TABLE_NAME = 'movie_facts'
 PRODUCTION_SCHEMA_NAME = 'production'
 GOOGLE_SHEET_TITLE = 'Kaggle Data Pipeline Report' 
 WORKSHEET_NAME = 'Final Data' 
-CREDENTIALS_FILE = 'credentials.json' 
+CREDENTIALS_FILE = r'D:\AIE321\PJ\AIE321_Bigdata_Movie_KPI_1M\credentials.json' 
 
 def run_publication_pipeline():
     """
@@ -24,24 +25,25 @@ def run_publication_pipeline():
     load_dotenv()
 
     # ดึงค่าการเชื่อมต่อจาก .env (สำคัญ: ใช้ DB_HOST=localhost และ DB_PORT=6666)
-    DB_HOST = os.getenv("DB_HOST")
-    DB_USER = os.getenv("POSTGRES_USER")
-    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
-    DB_NAME = os.getenv("POSTGRES_DB")
-    DB_PORT = os.getenv("DB_PORT")
+    DB_USER = 'DB_AIE321_BIG_DATA'
+    DB_PASSWORD = '321bigdatawork'
+    DB_HOST = 'localhost' 
+    DB_PORT = '6666'      
+    DB_NAME = 'AIE321' 
 
     # --- 2. การเชื่อมต่อฐานข้อมูล ---
     try:
-        # สร้าง Connection String
-        conn_string = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
-        engine = create_engine(conn_string)
+        # 🚨 ใช้ Connection String สำหรับ psycopg2 โดยตรง
+        conn_string_psycopg2 = f"dbname={DB_NAME} user={DB_USER} password={DB_PASSWORD} host={DB_HOST} port={DB_PORT}"
+        
+        print(f"--- เริ่มดึงข้อมูลจาก production.genre_average_revenue (Host: {DB_HOST}:{DB_PORT}) ---")
 
-        print(f"--- เริ่มดึงข้อมูลจาก {PRODUCTION_SCHEMA_NAME}.{PRODUCTION_TABLE_NAME} (Host: {DB_HOST}:{DB_PORT}) ---")
-        
-        # ดึงข้อมูลที่แปลงแล้วจาก Production Schema
-        sql_query = f"SELECT * FROM {PRODUCTION_SCHEMA_NAME}.{PRODUCTION_TABLE_NAME};"
-        final_df = pd.read_sql(sql_query, con=engine)
-        
+        # 🚨 ใช้ psycopg2.connect() เพื่อรับ Connection object ที่มี .cursor() แน่นอน
+        with psycopg2.connect(conn_string_psycopg2) as conn:
+            # 📌 ใช้ pd.read_sql_query กับ Connection object ของ psycopg2
+            sql_query_string = f"SELECT * FROM {PRODUCTION_SCHEMA_NAME}.genre_average_revenue ORDER BY average_revenue DESC;" 
+            final_df = pd.read_sql_query(sql_query_string, conn) # <--- ส่ง conn ของ psycopg2 เข้าไป
+
         print(f"ดึงข้อมูลพร้อมเผยแพร่มาได้ {len(final_df)} แถว")
 
     except Exception as e:
