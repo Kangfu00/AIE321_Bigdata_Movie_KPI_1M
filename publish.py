@@ -1,45 +1,43 @@
 # publish.py
 
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 import os
 from dotenv import load_dotenv
-import psycopg2
 
 # นำเข้าไลบรารีสำหรับ Google Sheets
 import gspread
-from gspread_dataframe import set_with_dataframe # ใช้สำหรับเขียน DataFrame ลง Sheets
+from gspread_dataframe import set_with_dataframe 
 
-# --- 1. การตั้งค่าตัวแปรคงที่ (ปรับปรุงสำหรับ OAuth) ---
+# --- 1. การตั้งค่าตัวแปรคงที่ ---
 PRODUCTION_TABLE_NAME = 'movie_facts' 
 PRODUCTION_SCHEMA_NAME = 'production'
-GOOGLE_SHEET_TITLE = 'Kaggle Data Pipeline Report' 
+# GOOGLE_SHEET_TITLE = 'Kaggle Data Pipeline Report'  <--- (ไม่ต้องใช้แล้ว)
 WORKSHEET_NAME = 'Final Data' 
-CREDENTIALS_FILE = 'credentials.json' 
+
+# 🚨 แทนที่ด้วย File ID ที่คุณคัดลอกมา
+GOOGLE_SHEET_ID = '1ZGoqwqq17L2_6ywhCK27-KsPyJ-V0xcgQfjIYblNmpw' 
+
+# 🚨 ใช้ชื่อไฟล์มาตรฐานสำหรับ Service Account (แก้ไขชื่อตัวแปรให้ตรงกับไฟล์ที่คุณใช้)
+CREDENTIALS_FILE = 'client_secret.json' 
 
 def run_publication_pipeline():
-    """
-    ฟังก์ชันหลักในการดึงข้อมูลจาก Production DB และเผยแพร่ไปยัง Google Sheets
-    """
     # 1. โหลดตัวแปรสภาพแวดล้อมจาก .env
     load_dotenv()
-
-    # ดึงค่าการเชื่อมต่อจาก .env (สำคัญ: ใช้ DB_HOST=localhost และ DB_PORT=6666)
-    DB_USER = 'DB_AIE321_BIG_DATA'
-    DB_PASSWORD = '321bigdatawork'
-    DB_HOST = 'localhost' 
-    DB_PORT = '6666'      
-    DB_NAME = 'AIE321' 
+    # ดึงค่าการเชื่อมต่อจาก .env 
+    DB_HOST = os.getenv("DB_HOST")
+    DB_USER = os.getenv("POSTGRES_USER")
+    DB_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+    DB_NAME = os.getenv("POSTGRES_DB")
+    DB_PORT = os.getenv("DB_PORT")
 
     # --- 2. การเชื่อมต่อฐานข้อมูล (ส่วนนี้ไม่มีการเปลี่ยนแปลง) ---
     try:
-        # สร้าง Connection String
         conn_string = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
         engine = create_engine(conn_string)
 
         print(f"--- เริ่มดึงข้อมูลจาก {PRODUCTION_SCHEMA_NAME}.{PRODUCTION_TABLE_NAME} (Host: {DB_HOST}:{DB_PORT}) ---")
         
-        # ดึงข้อมูลที่แปลงแล้วจาก Production Schema
         sql_query = f"SELECT * FROM {PRODUCTION_SCHEMA_NAME}.{PRODUCTION_TABLE_NAME};"
         final_df = pd.read_sql(sql_query, con=engine)
         
@@ -55,44 +53,45 @@ def run_publication_pipeline():
         print("!!! ไม่พบข้อมูลในตาราง Production ไม่สามารถเผยแพร่ได้ !!!")
         return
 
-    print(f"--- เริ่มเผยแพร่ข้อมูลไปยัง Google Sheets: {GOOGLE_SHEET_TITLE} ---")
+    print(f"--- เริ่มเผยแพร่ข้อมูลไปยัง Google Sheets: {GOOGLE_SHEET_ID} ---")
     
     try:
-        # *** 🚨 แก้ไข: ใช้ gspread.oauth() แทน service_account() ***
-        gc = gspread.oauth(
-            credentials_file=CREDENTIALS_FILE,
-            authorized_user_storage=STORAGE_FILE 
-        )
+        # ใช้ gspread.service_account() 
+        gc = gspread.service_account(filename=CREDENTIALS_FILE)
         
-        # ⚠️ ข้อความแจ้งเตือนถูกเปลี่ยนให้สอดคล้องกับไฟล์ที่ใช้ (client_secret.json)
-        print(f"เชื่อมต่อสำเร็จ! จะใช้ Token ในไฟล์ {STORAGE_FILE} สำหรับการรันครั้งต่อไป")
+        # 🚨 แก้ไข: ลบการเรียกใช้ gc.auth.service_account_email
+        print(f"เชื่อมต่อสำเร็จด้วย Service Account.") 
         
-        # เปิด Spreadsheet (หรือสร้างใหม่)
+        # *** 🚨 แก้ไข: ใช้ gc.open_by_key() แทน gc.open() ***
         try:
-            spreadsheet = gc.open(GOOGLE_SHEET_TITLE)
+            # ใช้ File ID ที่แน่นอน เพื่อข้ามปัญหา Naming Mismatch
+            spreadsheet = gc.open_by_key(GOOGLE_SHEET_ID) 
+            print(f"พบ Spreadsheet ด้วย ID: {GOOGLE_SHEET_ID}")
         except gspread.SpreadsheetNotFound:
-            print(f"ไม่พบ Spreadsheet กำลังสร้างใหม่ชื่อ '{GOOGLE_SHEET_TITLE}'...")
-            spreadsheet = gc.create(GOOGLE_SHEET_TITLE)
-            # ต้องแชร์ Spreadsheet นี้ให้กับบัญชี Google ส่วนตัวที่ใช้ล็อกอิน! 
+            # หากยังไม่พบไฟล์ด้วย ID ให้แจ้ง Error ที่ชัดเจน
+            print(f"!!! Error: ไม่พบ Spreadsheet ด้วย ID นี้ ({GOOGLE_SHEET_ID})")
+            print("โปรดตรวจสอบ ID และยืนยันว่าได้แชร์สิทธิ์ Editor ให้ Service Account แล้ว")
+            return
             
         # เลือกหรือสร้าง Worksheet
         try:
             worksheet = spreadsheet.worksheet(WORKSHEET_NAME)
         except gspread.WorksheetNotFound:
+            # หากไม่พบ Worksheet ให้สร้าง Worksheet ใหม่ภายใน Spreadsheet ที่เปิดอยู่
             worksheet = spreadsheet.add_worksheet(title=WORKSHEET_NAME, rows="100", cols="20")
+            print(f"สร้าง Worksheet ใหม่ชื่อ '{WORKSHEET_NAME}'")
         
         # เขียน DataFrame ลง Sheets
         set_with_dataframe(worksheet, final_df, row=1, col=1, include_index=False, resize=True)
         
-        print(f"*** เผยแพร่ข้อมูล {len(final_df)} แถวไปยัง '{GOOGLE_SHEET_TITLE}' เสร็จสิ้น ***")
+        print(f"*** เผยแพร่ข้อมูล {len(final_df)} แถวไปยัง ID: {GOOGLE_SHEET_ID} เสร็จสิ้น ***")
         print(f"ลิงก์ Spreadsheet: {spreadsheet.url}")
         
     except FileNotFoundError:
-        # ⚠️ แก้ไขข้อความ Error
         print(f"!!! ERROR: ไม่พบไฟล์ {CREDENTIALS_FILE} โปรดตรวจสอบพาธ !!!")
     except Exception as e:
         print(f"เกิดข้อผิดพลาดในการเชื่อมต่อ/เผยแพร่ Google Sheets: {e}")
-        print("โปรดตรวจสอบการล็อกอิน OAuth ครั้งแรก และสิทธิ์การเข้าถึง Sheets ของบัญชีคุณ")
+        print("โปรดตรวจสอบว่าได้แชร์ Spreadsheet ให้กับอีเมล Service Account แล้ว")
 
 
 if __name__ == '__main__':
