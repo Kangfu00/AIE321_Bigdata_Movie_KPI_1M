@@ -69,6 +69,12 @@ khemmathat klindong 1660902543
 
 ```bash
 docker-compose up -d
+```
 
-### 4. รัน Pipeline อัตโนมัติ (Automated Run)
-ใช้สคริปต์หลัก run_pipeline.py เพื่อดำเนินการทุกขั้นตอนตั้งแต่ Ingest จนถึง Publish 
+### 4.รัน Pipeline อัตโนมัติ (Automated Run)
+
+ใช้สคริปต์หลัก run_pipeline.py เพื่อดำเนินการทุกขั้นตอนตั้งแต่ Ingest จนถึง Publish:
+
+```bash
+python run_pipeline.py
+```
